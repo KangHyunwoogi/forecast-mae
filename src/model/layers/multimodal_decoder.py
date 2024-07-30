@@ -13,7 +13,7 @@ class MultimodalDecoder(nn.Module):
         self.multimodal_proj = nn.Linear(embed_dim, 6 * embed_dim)
 
         self.loc = nn.Sequential(
-            nn.Linear(embed_dim, 256),
+            nn.Linear(embed_dim, 256), 
             nn.ReLU(),
             nn.Linear(256, embed_dim),
             nn.ReLU(),
