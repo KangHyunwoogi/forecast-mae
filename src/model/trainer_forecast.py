@@ -5,8 +5,9 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics import MetricCollection
-
+from torchmetrics import MetricCollection, Accuracy, Precision, Recall, AUROC
+import sys
+sys.path.append("/home/ailab/Desktop/wook/forecast-mae")
 from src.metrics import MR, minADE, minFDE
 from src.utils.optim import WarmupCosLR
 from src.utils.submission_av2 import SubmissionAv2
@@ -52,15 +53,26 @@ class Trainer(pl.LightningModule):
         if pretrained_weights is not None:
             self.net.load_from_checkpoint(pretrained_weights)
 
+        # metrics = MetricCollection(
+        #     {
+        #         "minADE1": minADE(k=1),
+        #         "minADE6": minADE(k=6),
+        #         "minFDE1": minFDE(k=1),
+        #         "minFDE6": minFDE(k=6),
+        #         "MR": MR(),
+        #     }
+        # )
+        
         metrics = MetricCollection(
             {
-                "minADE1": minADE(k=1),
-                "minADE6": minADE(k=6),
-                "minFDE1": minFDE(k=1),
-                "minFDE6": minFDE(k=6),
-                "MR": MR(),
+                "Accuracy": Accuracy(),
+                "Precision": Precision(),
+                "Recall": Recall(),
+                # "F1": F1(),
+                "AUROC": AUROC()
             }
         )
+        
         self.val_metrics = metrics.clone(prefix="val_")
 
     def forward(self, data):
@@ -74,30 +86,62 @@ class Trainer(pl.LightningModule):
         )
         return predictions, prob
 
+    # def cal_loss(self, out, data):
+    #     y_hat, pi, y_hat_others = out["y_hat"], out["pi"], out["y_hat_others"]
+    #     y, y_others = data["y"][:, 0], data["y"][:, 1:]
+
+    #     l2_norm = torch.norm(y_hat[..., :2] - y.unsqueeze(1), dim=-1).sum(dim=-1)
+    #     best_mode = torch.argmin(l2_norm, dim=-1)
+    #     y_hat_best = y_hat[torch.arange(y_hat.shape[0]), best_mode]
+
+    #     agent_reg_loss = F.smooth_l1_loss(y_hat_best[..., :2], y)
+    #     agent_cls_loss = F.cross_entropy(pi, best_mode.detach())
+
+    #     others_reg_mask = ~data["x_padding_mask"][:, 1:, 50:]
+    #     others_reg_loss = F.smooth_l1_loss(
+    #         y_hat_others[others_reg_mask], y_others[others_reg_mask]
+    #     )
+
+    #     loss = agent_reg_loss + agent_cls_loss + others_reg_loss
+
+    #     return {
+    #         "loss": loss,
+    #         "reg_loss": agent_reg_loss.item(),
+    #         "cls_loss": agent_cls_loss.item(),
+    #         "others_reg_loss": others_reg_loss.item(),
+    #     }
+        
     def cal_loss(self, out, data):
-        y_hat, pi, y_hat_others = out["y_hat"], out["pi"], out["y_hat_others"]
-        y, y_others = data["y"][:, 0], data["y"][:, 1:]
+        y_hat = out["y_hat"]  # 이진 분류 확률
+        ### Need to be fixed ###
+        y = data["y"][:, 0]  # 실제 라벨
 
-        l2_norm = torch.norm(y_hat[..., :2] - y.unsqueeze(1), dim=-1).sum(dim=-1)
-        best_mode = torch.argmin(l2_norm, dim=-1)
-        y_hat_best = y_hat[torch.arange(y_hat.shape[0]), best_mode]
+        # 이진 교차 엔트로피 손실
+        cls_loss = F.binary_cross_entropy(y_hat, y.float())
 
-        agent_reg_loss = F.smooth_l1_loss(y_hat_best[..., :2], y)
-        agent_cls_loss = F.cross_entropy(pi, best_mode.detach())
+        # 만약 여전히 y_hat이 회귀 예측도 포함한다면, 아래 회귀 손실 유지
+        # reg_loss = F.smooth_l1_loss(y_hat[..., :2], y[..., :2])  # 예시
 
-        others_reg_mask = ~data["x_padding_mask"][:, 1:, 50:]
-        others_reg_loss = F.smooth_l1_loss(
-            y_hat_others[others_reg_mask], y_others[others_reg_mask]
-        )
+        # 다른 에이전트에 대한 손실 (만약 필요하다면)
+        if "y_hat_others" in out and "x_padding_mask" in data:
+            y_hat_others = out["y_hat_others"]
+            y_others = data["y"][:, 1:]
+            others_reg_mask = ~data["x_padding_mask"][:, 1:, 50:]
+            others_reg_loss = F.smooth_l1_loss(
+                y_hat_others[others_reg_mask], y_others[others_reg_mask]
+            )
+        else:
+            others_reg_loss = torch.tensor(0.0)  # 필요 없는 경우
 
-        loss = agent_reg_loss + agent_cls_loss + others_reg_loss
+        # 총 손실 계산
+        loss = cls_loss + others_reg_loss
 
         return {
             "loss": loss,
-            "reg_loss": agent_reg_loss.item(),
-            "cls_loss": agent_cls_loss.item(),
-            "others_reg_loss": others_reg_loss.item(),
+            "cls_loss": cls_loss.item(),
+            "others_reg_loss": others_reg_loss.item() if others_reg_loss is not None else 0,
         }
+
 
     def training_step(self, data, batch_idx):
         out = self(data)
@@ -118,6 +162,7 @@ class Trainer(pl.LightningModule):
     def validation_step(self, data, batch_idx):
         out = self(data)
         losses = self.cal_loss(out, data)
+        ### Need to be fixed ###
         metrics = self.val_metrics(out, data["y"][:, 0])
 
         self.log(
