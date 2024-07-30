@@ -7,7 +7,6 @@ import torch.nn.functional as F
 from .layers.agent_embedding import AgentEmbeddingLayer
 from .layers.lane_embedding import LaneEmbeddingLayer
 from .layers.multimodal_decoder import MultimodalDecoder
-from .layers.binaryclassification_decoder import BinaryClassificationDecoder
 from .layers.transformer_blocks import Block
 
 
@@ -50,8 +49,7 @@ class ModelForecast(nn.Module):
         self.actor_type_embed = nn.Parameter(torch.Tensor(4, embed_dim))
         self.lane_type_embed = nn.Parameter(torch.Tensor(1, 1, embed_dim))
 
-        # self.decoder = MultimodalDecoder(embed_dim, future_steps)
-        self.decoder = BinaryClassificationDecoder(embed_dim)
+        self.decoder = MultimodalDecoder(embed_dim, future_steps)
         self.dense_predictor = nn.Sequential(
             nn.Linear(embed_dim, 256), nn.ReLU(), nn.Linear(256, future_steps * 2)
         )
@@ -135,14 +133,13 @@ class ModelForecast(nn.Module):
         x_encoder = self.norm(x_encoder)
 
         x_agent = x_encoder[:, 0]
-        y_hat = self.decoder(x_agent)
-        # y_hat, pi = self.decoder(x_agent)
+        y_hat, pi = self.decoder(x_agent)
 
-        # x_others = x_encoder[:, 1:N]
-        # y_hat_others = self.dense_predictor(x_others).view(B, -1, 60, 2)
+        x_others = x_encoder[:, 1:N]
+        y_hat_others = self.dense_predictor(x_others).view(B, -1, 60, 2)
 
         return {
             "y_hat": y_hat,
-            # "pi": pi,
-            # "y_hat_others": y_hat_others,
+            "pi": pi,
+            "y_hat_others": y_hat_others,
         }
