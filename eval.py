@@ -5,13 +5,6 @@ import pytorch_lightning as pl
 from hydra.utils import instantiate, to_absolute_path
 from importlib import import_module
 
-# Single agent
-# python eval.py model=model_forecast data_root=/home/ailab/AILabDataset/01_Open_Dataset/24_Argoverse2/motion_forecasting batch_size=64 'checkpoint="./checkpoints/model_forecast_finetune.ckpt"'
-# python eval.py model=model_forecast data_root=/home/ailab/AILabDataset/01_Open_Dataset/24_Argoverse2/motion_forecasting batch_size=64 'checkpoint="./checkpoints/model_forecast_finetune.ckpt"' test=true
-
-# Multi agent
-# python eval.py model=model_forecast_multiagent data_root=/home/ailab/AILabDataset/01_Open_Dataset/24_Argoverse2/motion_forecasting batch_size=64 'checkpoint="./checkpoints/multiagent_baseline.ckpt"'
-# python eval.py model=model_forecast_multiagent data_root=/home/ailab/AILabDataset/01_Open_Dataset/24_Argoverse2/motion_forecasting batch_size=64 'checkpoint="./checkpoints/multiagent_baseline.ckpt"' test=true
 
 @hydra.main(version_base=None, config_path="./conf/", config_name="config")
 def main(conf):
