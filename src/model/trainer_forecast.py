@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torchmetrics import MetricCollection, Accuracy, Precision, Recall, AUROC
+from torchmetrics import MetricCollection, Accuracy, Precision, Recall
 import sys
 sys.path.append("/home/ailab/Desktop/wook/forecast-mae")
 from src.metrics import MR, minADE, minFDE
@@ -67,9 +67,9 @@ class Trainer(pl.LightningModule):
             {
                 "Accuracy": Accuracy(),
                 "Precision": Precision(),
-                "Recall": Recall(),
+                "Recall": Recall()
                 # "F1": F1(),
-                "AUROC": AUROC()
+                # "AUROC": AUROC()
             }
         )
         
@@ -114,7 +114,9 @@ class Trainer(pl.LightningModule):
     def cal_loss(self, out, data):
         y_hat = out["y_hat"]  # 이진 분류 확률
         ### Need to be fixed ###
-        y = data["y"][:, 0]  # 실제 라벨
+        y = data["y"]  # 실제 라벨
+        # y = torch.ones_like(y_hat)
+        
 
         # 이진 교차 엔트로피 손실
         cls_loss = F.binary_cross_entropy(y_hat, y.float())
@@ -163,11 +165,17 @@ class Trainer(pl.LightningModule):
         out = self(data)
         losses = self.cal_loss(out, data)
         ### Need to be fixed ###
-        metrics = self.val_metrics(out, data["y"][:, 0])
+        y_hat = out["y_hat"]  # 이진 분류 확률    
+        # y = torch.ones_like(y_hat)
+        # print(out["y_hat"])
+        print("---------------------------")
+        print(out["y_hat"])
+        print(data["y"])
+        metrics = self.val_metrics(out["y_hat"], data["y"])
 
         self.log(
-            "val/reg_loss",
-            losses["reg_loss"],
+            "val/cls_loss",
+            losses["cls_loss"],
             on_step=False,
             on_epoch=True,
             prog_bar=False,

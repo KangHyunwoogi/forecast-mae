@@ -13,7 +13,7 @@ class Trainer(pl.LightningModule):
     def __init__(
         self,
         dim=128,
-        historical_steps=50,
+        historical_steps=30,
         future_steps=60,
         encoder_depth=4,
         decoder_depth=4,
