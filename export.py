@@ -113,7 +113,7 @@ for i in range(num_elements):
 
 # 결과 배열: map_lane_left_y, map_lane_right_y
 
-print(map_lane_left_y)
+# print(map_lane_left_y)
 
 ego_past_trajectory_x = raw_data['ego_past_trajectory_x']
 ego_past_trajectory_y = raw_data['ego_past_trajectory_y']
@@ -143,13 +143,33 @@ for i in range(num_elements):
     lane_segment[:, 0] = percept_lane_center_x[i, :]
     lane_segment[:, 1] = percept_lane_center_y[i, :]
     lane_segments.append(torch.from_numpy(lane_segment).float())  # numpy 배열을 torch.Tensor로 변환
-    lane_attr.append([0, 0, 0])
-    is_intersection.append(False)
+    attribute = torch.tensor([0, 0, 0], dtype=torch.float)
+    lane_attr.append(attribute)
+    is_intersection.append(0)
     
 lane_positions = torch.stack(lane_segments, dim=0)
+lane_positions = lane_positions.unsqueeze(1)
 lane_attr = torch.stack(lane_attr, dim=0)
+lane_attr = lane_attr.unsqueeze(1)
 is_intersections = torch.Tensor(is_intersection)
+is_intersections = is_intersections.unsqueeze(1)
+lane_ctrs = lane_positions[:, 9:11].mean(dim=1)
+lane_ctrs = lane_ctrs.unsqueeze(1)
+lane_angles = torch.atan2(
+            lane_positions[:, :, 10, 1] - lane_positions[:, :, 9, 1],
+            lane_positions[:, :, 10, 0] - lane_positions[:, :, 9, 0],
+        )
+lane_angles = lane_angles.unsqueeze(1)
+lane_padding_mask = (
+    (lane_positions[:, :, :, 0] > 1000)
+    | (lane_positions[:, :, :, 0] < -1000)
+    | (lane_positions[:, :, :, 1] > 1000)
+    | (lane_positions[:, :, :, 1] < -1000)
+)
 
 print(lane_positions.size())
-
-    
+print(lane_attr.size())
+print(is_intersections.size())
+print(lane_ctrs.size())
+print(lane_angles.size())
+print(lane_padding_mask.size())
