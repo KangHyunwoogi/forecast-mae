@@ -27,6 +27,8 @@ class HMGExtractor:
     def process(self, raw_data, index):
         HmgInterfaceRosbagData = raw_data['HmgInterfaceRosbagData']
         surrounding_past_trajectory = raw_data['surrounding_past_trajectory_cell']
+        surrounding_past_vel_heading_cell = raw_data['surrounding_past_vel_heading_cell']
+        ego_velocity_ms = raw_data['ego_velocity_ms']
         labeled_data = raw_data['olabeledGtData']
         labeled_data_torch = torch.from_numpy(labeled_data)
         y = labeled_data_torch[index]
@@ -124,14 +126,14 @@ class HMGExtractor:
         map_lane_left_y[:len(filtered_interpolated_left_y)] = filtered_interpolated_left_y
         map_lane_right_y[:len(filtered_interpolated_right_y)] = filtered_interpolated_right_y
 
-        # ego_past_trajectory_x = raw_data['ego_past_trajectory_x']
-        # ego_past_trajectory_y = raw_data['ego_past_trajectory_y']
+        ego_past_trajectory_x = raw_data['ego_past_trajectory_x']
+        ego_past_trajectory_y = raw_data['ego_past_trajectory_y']
+        ego_past_heading_rad = raw_data['ego_past_heading_rad']
 
-        # for i in range(num_elements):
-        surrounding_past_trajectory_temp = surrounding_past_trajectory[index, 0]
-        surrounding_past_trajectory_data = surrounding_past_trajectory_temp.reshape(5,2,30)
-        surrounding_past_trajectory_data = surrounding_past_trajectory_data.transpose(0,2,1)
-            
+        #############################################
+        # for j in range(5):
+        #     x[j, :, 0] = torch.tensor(surrounding_agent[j * 2])       # x 좌표
+        #     x[j, :, 1] = torch.tensor(surrounding_agent[j * 2 + 1])   # y 좌표    
             
         # lane preprocess
         max_points_per_segments = 30
@@ -218,20 +220,33 @@ class HMGExtractor:
             | (lane_positions[:, :, 1] < -1000)
         )
         
-        x = torch.zeros((5, 30, 2))
-        x_velocity = torch.zeros((5, 30))
-        x_velocity_diff = torch.zeros((5, 30))
-        x_heading = torch.zeros((5, 30))
-        x_attr = torch.zeros((5, 3))
-        x_scored_agents_mask = torch.ones(5, dtype=torch.bool)
-        x_padding_mask = torch.zeros(5, 30, dtype=torch.bool)
-
-        # for i in range(num_elements):
         surrounding_agent = surrounding_past_trajectory[index, 0]
-        for j in range(5):
-            x[j, :, 0] = torch.tensor(surrounding_agent[j * 2])       # x 좌표
-            x[j, :, 1] = torch.tensor(surrounding_agent[j * 2 + 1])   # y 좌표
+        surrounding_agent_vel_heading = surrounding_past_vel_heading_cell[index, 0]
+        agent_number = 1 + int(surrounding_agent.shape[0]/2)
+        
+        x = torch.zeros((agent_number, 30, 2))
+        x_velocity = torch.zeros((agent_number, 30))
+        x_velocity_diff = torch.zeros((agent_number, 30))
+        x_heading = torch.zeros((agent_number, 30))
+        x_attr = torch.zeros((agent_number, 3))
+        # x_scored_agents_mask = torch.ones(agent_number, dtype=torch.bool)
+        # x_padding_mask = torch.zeros(agent_number, 30, dtype=torch.bool)
+        
+        x[0, :, 0] = torch.tensor(ego_past_trajectory_x[index])
+        x[0, :, 1] = torch.tensor(ego_past_trajectory_y[index])
+        x_heading[0, :] = torch.tensor(ego_past_heading_rad[index])
+        x_velocity[0, :] = torch.tensor(ego_velocity_ms[index])
+        
+        for j in range(agent_number-1):
+            x[j+1, :, 0] = torch.tensor(surrounding_agent[j * 2])       # x 좌표
+            x[j+1, :, 1] = torch.tensor(surrounding_agent[j * 2 + 1])   # y 좌표
+            x_velocity[j+1, :] = torch.tensor(surrounding_agent_vel_heading[j * 2])
+            x_heading[j+1, :] = torch.deg2rad(torch.tensor(surrounding_agent_vel_heading[j * 2 + 1]))
                 
+        
+        x_velocity_diff[:, 1:30] = x_velocity[:, 1:30] - x_velocity[:, :29]
+        x_velocity_diff[:, 0] = torch.zeros(agent_number, dtype=torch.float)
+        
         x_attr = x_attr
         x_positions = x[:, :30, :2]
         x_ctrs = x[:, 29, :2]
@@ -239,8 +254,15 @@ class HMGExtractor:
         x_velocity = x_velocity
         x_velocity_diff = x_velocity_diff
         padding_mask = (x == 0).all(dim=-1)
-        # GT 값 넣어야 함 Need to be fixed
+        padding_mask[0,-1] = False
         # y = None
+        x[:, 1:30] = torch.where(
+            (padding_mask[:, :29] | padding_mask[:, 1:30]).unsqueeze(-1),
+            torch.zeros(agent_number, 29, 2),
+            x[:, 1:30] - x[:, :29],
+        )
+        x[:, 0] = torch.zeros(agent_number, 2)
+        
         
         origin = torch.tensor([0, 0], dtype=torch.float)
         theta = torch.tensor([0], dtype=torch.float)
@@ -249,7 +271,7 @@ class HMGExtractor:
         city = torch.tensor([0], dtype=torch.int) 
         
         return {
-            "x": x[:, :50],
+            "x": x[:, :30],
             "y": y,
             "x_attr": x_attr,
             "x_positions": x_positions,

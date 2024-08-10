@@ -224,12 +224,12 @@ class ModelMAE(nn.Module):
         lane_feat = self.lane_embed(lane_feat.view(-1, L, D).contiguous())
         lane_feat = lane_feat.view(B, M, -1)
 
-        perception_lane_padding_mask = data["lane_padding_mask"]
-        perception_lane_normalized = data["lane_positions"] - data["lane_centers"].unsqueeze(-2)
+        perception_lane_padding_mask = data["perception_lane_padding_mask"]
+        perception_lane_normalized = data["perception_lane_positions"] - data["perception_lane_centers"].unsqueeze(-2)
         perception_lane_feat = torch.cat([perception_lane_normalized, ~perception_lane_padding_mask[..., None]], dim=-1)
-        B, M, L, D = perception_lane_feat.shape
+        B, P, L, D = perception_lane_feat.shape
         perception_lane_feat = self.perception_lane_embed(perception_lane_feat.view(-1, L, D).contiguous())
-        perception_lane_feat = perception_lane_feat.view(B, M, -1)
+        perception_lane_feat = perception_lane_feat.view(B, P, -1)
         
 
         actor_type_embed = self.actor_type_embed[data["x_attr"][..., 2].long()]
@@ -241,14 +241,14 @@ class ModelMAE(nn.Module):
 
         x_centers = torch.cat(
             # [data["x_centers"], data["x_centers"], data["lane_centers"]], dim=1
-            [data["x_centers"], data["lane_centers"], data["lane_centers"]], dim=1
+            [data["x_centers"], data["lane_centers"], data["perception_lane_centers"]], dim=1
         )
         angles = torch.cat(
             [
                 data["x_angles"][..., 29],
                 # data["x_angles"][..., 29],
                 data["lane_angles"],
-                data["lane_angles"],
+                data["perception_lane_angles"],
             ],
             dim=1,
         )
@@ -257,8 +257,8 @@ class ModelMAE(nn.Module):
 
         pos_embed = self.pos_embed(pos_feat)
         hist_feat += pos_embed[:, :N]
-        lane_feat += pos_embed[:, -M:]
-        perception_lane_feat += pos_embed[:, -M:]
+        lane_feat += pos_embed[:, -M-P:-P]
+        perception_lane_feat += pos_embed[:, -P:]
         # future_feat += pos_embed[:, N : N + N]
 
         (
@@ -292,7 +292,7 @@ class ModelMAE(nn.Module):
             perception_lane_key_padding_mask,
             perception_lane_ids_keep_list,
         ) = self.lane_random_masking(
-            perception_lane_feat, lane_mask_ratio, data["lane_key_padding_mask"]
+            perception_lane_feat, lane_mask_ratio, data["perception_lane_key_padding_mask"]
         )
 
         x = torch.cat(
@@ -319,7 +319,7 @@ class ModelMAE(nn.Module):
         assert x_decoder.shape[1] == Nh + Nl + Np
         hist_tokens = x_decoder[:, :Nh]
         # fut_tokens = x_decoder[:, Nh : Nh + Nf]
-        lane_tokens = x_decoder[:, -Nl:]
+        lane_tokens = x_decoder[:, -Nl+Np:]
         perception_lane_tokens = x_decoder[:, -Np:]
 
         decoder_hist_token = self.history_mask_token.repeat(B, N, 1)
@@ -340,7 +340,7 @@ class ModelMAE(nn.Module):
             decoder_lane_token[i, idx] = lane_tokens[i, : len(idx)]
             lane_pred_mask[i, idx] = False
             
-        decoder_perception_lane_token = self.perception_lane_mask_token.repeat(B, M, 1)
+        decoder_perception_lane_token = self.perception_lane_mask_token.repeat(B, P, 1)
         perception_lane_pred_mask = ~data["lane_key_padding_mask"]
         for i, idx in enumerate(perception_lane_ids_keep_list):
             decoder_perception_lane_token[i, idx] = perception_lane_tokens[i, : len(idx)]
@@ -375,23 +375,23 @@ class ModelMAE(nn.Module):
         hist_token = x_decoder[:, :N].reshape(-1, self.embed_dim)
         
         # future_token = x_decoder[:, N : 2 * N].reshape(-1, self.embed_dim)
-        lane_token = x_decoder[:, -M:]
-        perception_lane_token = x_decoder[:, -M:]
+        lane_token = x_decoder[:, -M-P:-P]
+        perception_lane_token = x_decoder[:, -P:]
         
 
         # lane pred loss
         lane_pred = self.lane_pred(lane_token).view(B, M, 30, 2)
         lane_reg_mask = ~lane_padding_mask
         lane_reg_mask[~lane_pred_mask] = False
-        print("lane information")
-        print(lane_pred[lane_reg_mask])
-        print(lane_normalized[lane_reg_mask])
+        # print("lane information")
+        # print(lane_pred[lane_reg_mask])
+        # print(lane_normalized[lane_reg_mask])
         lane_pred_loss = F.mse_loss(
             lane_pred[lane_reg_mask], lane_normalized[lane_reg_mask]
         )
         
         # perception lane pred loss
-        perception_lane_pred = self.perception_lane_pred(perception_lane_token).view(B, M, 30, 2)
+        perception_lane_pred = self.perception_lane_pred(perception_lane_token).view(B, P, 30, 2)
         perception_lane_reg_mask = ~perception_lane_padding_mask
         perception_lane_reg_mask[~perception_lane_pred_mask] = False
         perception_lane_pred_loss = F.mse_loss(
@@ -405,9 +405,9 @@ class ModelMAE(nn.Module):
         x_reg_mask = ~data["x_padding_mask"][:, :, :30]
         x_reg_mask[~hist_pred_mask] = False
         x_reg_mask = x_reg_mask.view(-1, 30)
-        print("agent information")
-        print(x_hat[x_reg_mask])
-        print(x[x_reg_mask])
+        # print("agent information")
+        # print(x_hat[x_reg_mask])
+        # print(x[x_reg_mask])
         hist_loss = F.l1_loss(x_hat[x_reg_mask], x[x_reg_mask])
 
         # print("-----------------------------")
@@ -426,12 +426,12 @@ class ModelMAE(nn.Module):
         # reg_mask = reg_mask.view(-1, 60)
         # future_loss = F.l1_loss(y_hat[reg_mask], y[reg_mask])
 
-        print("hist_loss")
-        print(hist_loss)
-        print("lane_pred_loss")
-        print(lane_pred_loss)
-        print("perception_lane_pred_loss")
-        print(perception_lane_pred_loss)
+        # print("hist_loss")
+        # print(hist_loss)
+        # print("lane_pred_loss")
+        # print(lane_pred_loss)
+        # print("perception_lane_pred_loss")
+        # print(perception_lane_pred_loss)
         
 
         loss = (
@@ -453,7 +453,7 @@ class ModelMAE(nn.Module):
             out["x_hat"] = x_hat.view(B, N, 30, 2)
             # out["y_hat"] = y_hat.view(1, B, N, 60, 2)
             out["lane_hat"] = lane_pred.view(B, M, 30, 2)
-            out["perception_lane_hat"] = perception_lane_pred.view(B, M, 30, 2)
+            out["perception_lane_hat"] = perception_lane_pred.view(B, P, 30, 2)
             out["lane_keep_ids"] = lane_ids_keep_list
             out["perception_lane_keep_ids"] = perception_lane_ids_keep_list
             out["hist_keep_ids"] = hist_keep_ids_list

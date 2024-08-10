@@ -113,31 +113,31 @@ class ModelForecast(nn.Module):
         lane_feat = self.lane_embed(lane_normalized.view(-1, L, D).contiguous())
         lane_feat = lane_feat.view(B, M, -1)
 
-        perception_lane_padding_mask = data["lane_padding_mask"]
-        perception_lane_normalized = data["lane_positions"] - data["lane_centers"].unsqueeze(-2)
+        perception_lane_padding_mask = data["perception_lane_padding_mask"]
+        perception_lane_normalized = data["perception_lane_positions"] - data["perception_lane_centers"].unsqueeze(-2)
         perception_lane_normalized = torch.cat(
             [perception_lane_normalized, ~perception_lane_padding_mask[..., None]], dim=-1
         )
-        B, M, L, D = perception_lane_normalized.shape
+        B, P, L, D = perception_lane_normalized.shape
         perception_lane_feat = self.lane_embed(perception_lane_normalized.view(-1, L, D).contiguous())
-        perception_lane_feat = lane_feat.view(B, M, -1)
+        perception_lane_feat = lane_feat.view(B, P, -1)
 
-        x_centers = torch.cat([data["x_centers"], data["lane_centers"], data["lane_centers"]], dim=1)
-        angles = torch.cat([data["x_angles"][:, :, 29], data["lane_angles"], data["lane_angles"]], dim=1)
+        x_centers = torch.cat([data["x_centers"], data["lane_centers"], data["perception_lane_centers"]], dim=1)
+        angles = torch.cat([data["x_angles"][:, :, 29], data["lane_angles"], data["perception_lane_angles"]], dim=1)
         x_angles = torch.stack([torch.cos(angles), torch.sin(angles)], dim=-1)
         pos_feat = torch.cat([x_centers, x_angles], dim=-1)
         pos_embed = self.pos_embed(pos_feat)
 
         actor_type_embed = self.actor_type_embed[data["x_attr"][..., 2].long()]
         lane_type_embed = self.lane_type_embed.repeat(B, M, 1)
-        perception_lane_type_embed = self.lane_type_embed.repeat(B, M, 1)
+        perception_lane_type_embed = self.lane_type_embed.repeat(B, P, 1)
         actor_feat += actor_type_embed
         lane_feat += lane_type_embed
         perception_lane_feat += perception_lane_type_embed
 
         x_encoder = torch.cat([actor_feat, lane_feat, perception_lane_feat], dim=1)
         key_padding_mask = torch.cat(
-            [data["x_key_padding_mask"], data["lane_key_padding_mask"], data["lane_key_padding_mask"]], dim=1
+            [data["x_key_padding_mask"], data["lane_key_padding_mask"], data["perception_lane_key_padding_mask"]], dim=1
         )
 
         x_encoder = x_encoder + pos_embed
@@ -145,6 +145,7 @@ class ModelForecast(nn.Module):
             x_encoder = blk(x_encoder, key_padding_mask=key_padding_mask)
         x_encoder = self.norm(x_encoder)
 
+        # 여기 check하기, 현재 자차 정보 안들어가는것!
         x_agent = x_encoder[:, 0]
         y_hat = self.decoder(x_agent)
         # y_hat, pi = self.decoder(x_agent)
