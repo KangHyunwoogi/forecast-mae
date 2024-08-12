@@ -60,7 +60,7 @@ class Trainer(pl.LightningModule):
 
     def validation_step(self, data, batch_idx):
         out = self(data)
-        self.log("val_loss", out["loss"], on_epoch=True)
+        self.log("val_Accuracy", out["loss"], on_epoch=True)
 
     def configure_optimizers(self):
         decay = set()

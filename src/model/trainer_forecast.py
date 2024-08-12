@@ -166,11 +166,6 @@ class Trainer(pl.LightningModule):
         losses = self.cal_loss(out, data)
         ### Need to be fixed ###
         y_hat = out["y_hat"]  # 이진 분류 확률    
-        # y = torch.ones_like(y_hat)
-        # print(out["y_hat"])
-        print("---------------------------")
-        print(out["y_hat"])
-        print(data["y"])
         metrics = self.val_metrics(out["y_hat"], data["y"])
 
         self.log(
