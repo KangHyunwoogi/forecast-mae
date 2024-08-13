@@ -27,6 +27,7 @@ class ModelForecast(nn.Module):
             4, embed_dim // 4, drop_path_rate=drop_path
         )
         self.lane_embed = LaneEmbeddingLayer(3, embed_dim)
+        self.perception_lane_embed = LaneEmbeddingLayer(3, embed_dim)
 
         self.pos_embed = nn.Sequential(
             nn.Linear(4, embed_dim),
@@ -119,8 +120,8 @@ class ModelForecast(nn.Module):
             [perception_lane_normalized, ~perception_lane_padding_mask[..., None]], dim=-1
         )
         B, P, L, D = perception_lane_normalized.shape
-        perception_lane_feat = self.lane_embed(perception_lane_normalized.view(-1, L, D).contiguous())
-        perception_lane_feat = lane_feat.view(B, P, -1)
+        perception_lane_feat = self.perception_lane_embed(perception_lane_normalized.view(-1, L, D).contiguous())
+        perception_lane_feat = perception_lane_feat.view(B, P, -1)
 
         x_centers = torch.cat([data["x_centers"], data["lane_centers"], data["perception_lane_centers"]], dim=1)
         angles = torch.cat([data["x_angles"][:, :, 29], data["lane_angles"], data["perception_lane_angles"]], dim=1)

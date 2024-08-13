@@ -341,7 +341,7 @@ class ModelMAE(nn.Module):
             lane_pred_mask[i, idx] = False
             
         decoder_perception_lane_token = self.perception_lane_mask_token.repeat(B, P, 1)
-        perception_lane_pred_mask = ~data["lane_key_padding_mask"]
+        perception_lane_pred_mask = ~data["perception_lane_key_padding_mask"]
         for i, idx in enumerate(perception_lane_ids_keep_list):
             decoder_perception_lane_token[i, idx] = perception_lane_tokens[i, : len(idx)]
             perception_lane_pred_mask[i, idx] = False
@@ -361,7 +361,7 @@ class ModelMAE(nn.Module):
                 data["x_key_padding_mask"],
                 # future_padding_mask.all(-1),
                 data["lane_key_padding_mask"],
-                data["lane_key_padding_mask"],
+                data["perception_lane_key_padding_mask"],
             ],
             dim=1,
         )
