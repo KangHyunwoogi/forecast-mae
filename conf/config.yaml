@@ -11,14 +11,14 @@ save_top_k: 10
 data_root:
 checkpoint:
 pretrained_weights:
-output: ${model.name}-${model.phase}
+output: ${model.name}-${model.phase}-${model.additional_name}
 
 # trainer
 num_workers: 8
 gpus: 1
 sync_bn: true
 batch_size: 32
-epochs: 60
+epochs: 200
 warmup_epochs: 10
 
 # optimizer

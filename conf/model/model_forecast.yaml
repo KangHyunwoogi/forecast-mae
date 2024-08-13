@@ -1,5 +1,8 @@
 name: forecast-mae
 phase: forecast
+additional_name: test_hmg_transfomer
+# additional_name: paper_v1_64
+
 
 target:
   _target_: src.model.trainer_forecast.Trainer

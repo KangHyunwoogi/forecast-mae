@@ -1,5 +1,6 @@
 name: multiagent-baseline
 phase: forecast
+additional_name:
 
 target:
   _target_: src.model.multiagent.trainer_forecast_ma.Trainer
