@@ -45,7 +45,7 @@ python3 eval.py data_root=/path/to/data_root model=model_forecast batch_size=64 
     - ex) python3 eval.py data_root=/Desktop/git/HMG_Transformer model=model_forecast batch_size=128 'checkpoint="/Desktop/git/HMG_Transformer/Outputs/2024-08-13/12-49-19/checkpoints/last.ckpt"'
 
 - 학습 완료 시, command 창에 나오는 ```Accuracy, Precision, Recall``` 확인
-![alt text](image.png)
+![alt text](png/image.png)
 
 ## Acknowledgements
 
