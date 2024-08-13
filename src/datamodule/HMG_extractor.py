@@ -88,26 +88,41 @@ class HMGExtractor:
         map_lane_left_y = np.zeros((num_points))
         map_lane_right_y = np.zeros((num_points))
 
+        map_lane_left_left_y = np.zeros((num_points))
+        map_lane_right_right_y = np.zeros((num_points))
+
         # for i in range(num_elements):
             # 각 요소의 값을 추출하여 저장
         path_info_t = hdmap_lane_info[0]['PathInfo_t'][index]  # 1x1 struct 접근
         route_info = path_info_t['RouteInfo'][0, 0]  # 1x1 struct 접근
+        left_route_info = path_info_t['LeftRouteInfo'][0, 0]  # 1x1 struct 접근
+        right_route_info = path_info_t['RightRouteInfo'][0, 0]  # 1x1 struct 접근
         
         left_x = route_info['f64LeftRouteLon'][0,0]
         left_y = route_info['f64LeftRouteLat'][0,0]
         right_x = route_info['f64RightRouteLon'][0,0]
         right_y = route_info['f64RightRouteLat'][0,0]
         
+        left_left_x = left_route_info['f64RouteLon'][0,0]
+        left_left_y = left_route_info['f64RouteLat'][0,0]
+        right_right_x = right_route_info['f64RouteLon'][0,0]
+        right_right_y = right_route_info['f64RouteLat'][0,0]
+        
         left_range_start = left_view_range[0]
         left_range_end = left_view_range[1]
-        left_valid_indices = (left_x > left_range_start - 3) & (left_x < left_range_end) & (left_y < 9) & (left_y > -9)
+        left_valid_indices = (left_x > left_range_start - 3) & (left_x < left_range_end) # & (left_y < 9) & (left_y > -9)
+        left_left_valid_indices = (left_left_x > left_range_start - 3) & (left_left_x < left_range_end) # & left_y < 9 & left_y > -9;
 
         right_range_start = right_view_range[0]
         right_range_end = right_view_range[1]
-        right_valid_indices = (right_x > right_range_start - 3) & (right_x < right_range_end) & (right_y < 9) & (right_y > -9)
+        right_valid_indices = (right_x > right_range_start - 3) & (right_x < right_range_end) # & (right_y < 9) & (right_y > -9)
+        right_right_valid_indices = (right_right_x > right_range_start - 3) & (right_right_x < right_range_end) # & left_y < 9 & left_y > -9;
 
         filtered_left_y = left_y[left_valid_indices]
         filtered_right_y = right_y[right_valid_indices]
+        filtered_left_left_y = left_left_y[left_left_valid_indices]
+        filtered_right_right_y = right_right_y[right_right_valid_indices]
+        
 
         # y값을 cubic spline을 사용하여 보간
         if len(filtered_left_y) > 1:
@@ -122,9 +137,25 @@ class HMGExtractor:
         else:
             filtered_interpolated_right_y = np.zeros(num_points)
 
+        if len(filtered_left_left_y) > 1:
+            f_left = interp1d(np.arange(len(filtered_left_left_y)), filtered_left_left_y, kind='cubic', fill_value="extrapolate")
+            filtered_interpolated_left_left_y = f_left(np.linspace(0, len(filtered_left_left_y) - 1, num_points))
+        else:
+            filtered_interpolated_left_left_y = np.zeros(num_points)
+
+        if len(filtered_right_right_y) > 1:
+            f_right = interp1d(np.arange(len(filtered_right_right_y)), filtered_right_right_y, kind='cubic', fill_value="extrapolate")
+            filtered_interpolated_right_right_y = f_right(np.linspace(0, len(filtered_right_right_y) - 1, num_points))
+        else:
+            filtered_interpolated_right_right_y = np.zeros(num_points)
+
+
         # 각 행에 값을 할당
         map_lane_left_y[:len(filtered_interpolated_left_y)] = filtered_interpolated_left_y
         map_lane_right_y[:len(filtered_interpolated_right_y)] = filtered_interpolated_right_y
+        
+        map_lane_left_left_y[:len(filtered_interpolated_left_left_y)] = filtered_interpolated_left_left_y
+        map_lane_right_right_y[:len(filtered_interpolated_right_right_y)] = filtered_interpolated_right_right_y
 
         ego_past_trajectory_x = raw_data['ego_past_trajectory_x']
         ego_past_trajectory_y = raw_data['ego_past_trajectory_y']
@@ -189,18 +220,34 @@ class HMGExtractor:
         lane_center_x = (percept_lane_left_x + percept_lane_right_x) / 2
         lane_center_y = (map_lane_left_y + map_lane_right_y) / 2
 
-        lane_segment = np.zeros((max_points_per_segments, 2))
+        left_lane_center_y = (map_lane_left_left_y + map_lane_left_y) / 2
+        right_lane_center_y = (map_lane_left_y + map_lane_right_right_y) / 2
+
+        lane_segment = np.zeros((3, max_points_per_segments, 2))
 
         # for i in range(num_elements):
             # 반복문 내부에서는 각각의 레인 세그먼트를 텐서로 변환
-        lane_segment[:, 0] = lane_center_x[:]
-        lane_segment[:, 1] = lane_center_y[:]
+        # lane_segment[:, 0] = lane_center_x[:]
+        # lane_segment[:, 1] = lane_center_y[:]
+        
+        lane_segment[0, :, 0] = lane_center_x[:]
+        lane_segment[0, :, 1] = lane_center_y[:]
+        
+        lane_segment[1, :, 0] = lane_center_x[:]
+        lane_segment[1, :, 1] = left_lane_center_y[:]
+        
+        lane_segment[2, :, 0] = lane_center_x[:]
+        lane_segment[2, :, 1] = right_lane_center_y[:]
+        
         lane_segments.append(torch.from_numpy(lane_segment).float())  # numpy 배열을 torch.Tensor로 변환
         attribute = torch.tensor([0, 0, 0], dtype=torch.float)
         lane_attr.append(attribute)
         is_intersection.append(0)
             
-        lane_positions = torch.stack(lane_segments, dim=0)
+        # FIX : from HMG Route Validation to AILAB Map Change Detection
+        # lane_positions = torch.stack(lane_segments, dim=0)
+        lane_positions = torch.cat(lane_segments, dim=0)
+        
         # lane_positions = lane_positions.unsqueeze(1)
         lane_attr = torch.stack(lane_attr, dim=0)
         # lane_attr = lane_attr.unsqueeze(1)
@@ -269,6 +316,8 @@ class HMGExtractor:
         scenario_id = torch.tensor([0], dtype=torch.int) 
         agent_id = torch.tensor([0], dtype=torch.int) 
         city = torch.tensor([0], dtype=torch.int) 
+        
+        print(lane_positions.shape)
         
         return {
             "x": x[:, :30],
