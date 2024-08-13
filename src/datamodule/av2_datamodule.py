@@ -6,7 +6,6 @@ from torch.utils.data import DataLoader as TorchDataLoader
 
 from .av2_dataset import Av2Dataset, collate_fn
 
-
 class Av2DataModule(LightningDataModule):
     def __init__(
         self,
@@ -31,30 +30,23 @@ class Av2DataModule(LightningDataModule):
         self.pin_memory = pin_memory
         self.test = test
 
-    def setup(self, stage: Optional[str] = None) -> None:
-        # if not self.test:
-        #     self.train_dataset = Av2Dataset(
-        #         data_root=self.data_root / self.data_folder, cached_split="train"
-        #     )
-        #     self.val_dataset = Av2Dataset(
-        #         data_root=self.data_root / self.data_folder, cached_split="val"
-        #     )
-        # else:
-        #     self.test_dataset = Av2Dataset(
-        #         data_root=self.data_root / self.data_folder, cached_split="test"
-        #     )
-            
+    def setup(self, stage: Optional[str] = None) -> None:         
         if not self.test:
             self.train_dataset = Av2Dataset(
-                # data_root=self.data_root / self.data_folder, data_file="train_data.mat"
-                data_root="/home/ailab/AILabDataset/03_Shared_Repository/hyunwook/05_Projects/HMG_route_validation", data_file="train_dataset_1.mat"
+                # data_root="/home/ailab/AILabDataset/03_Shared_Repository/hyunwook/05_Projects/HMG_route_validation/Transformer_dataset", data_file="train_dataset_1.mat"
+                # data_root=os.path.join(self.data_root, 'train_dataset_1.mat')
+                data_root=self.data_root, data_file="train_dataset.mat"
             )
             self.val_dataset = Av2Dataset(
-                data_root="/home/ailab/AILabDataset/03_Shared_Repository/hyunwook/05_Projects/HMG_route_validation", data_file="test_dataset.mat"
+                # data_root="/home/ailab/AILabDataset/03_Shared_Repository/hyunwook/05_Projects/HMG_route_validation/Transformer_dataset", data_file="test_dataset.mat"
+                # data_root=os.path.join(self.data_root, 'test_dataset.mat')
+                data_root=self.data_root, data_file="validation_dataset.mat"
             )
         else:
             self.test_dataset = Av2Dataset(
-                data_root="/home/ailab/AILabDataset/03_Shared_Repository/hyunwook/05_Projects/HMG_route_validation", data_file="test_dataset.mat"
+                # data_root="/home/ailab/AILabDataset/03_Shared_Repository/hyunwook/05_Projects/HMG_route_validation/Transformer_dataset", data_file="train_dataset_2.mat"
+                # data_root=os.path.join(self.data_root, 'train_dataset_2.mat')
+                data_root=self.data_root, data_file="test_dataset.mat"
             )
             
 
