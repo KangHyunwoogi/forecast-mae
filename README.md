@@ -23,7 +23,7 @@ python3 train.py data_root=/path/to/data_root model=model_mae batch_size=128
     - ex) python3 train.py data_root=/Desktop/git/HMG_Transformer model=model_mae batch_size=128
 
 - 학습 완료 시, ```Outputs/forecast-mae-pretrain/YYYY-MM-DD/HH-MM-SS``` 폴더 내 학습 결과 생성
-    - ex) Outputs/forecast-mae-pretrain/2024-08-13/12-30-30 폴더 생성 확인
+    - ex) Outputs/forecast-mae-pretrain/2024-08-13/11-40-41 폴더 생성 확인
 
 ### Phase 2 - fine-tuning:
 #### Phase 1을 통해 pre-trained된 모델을 통한 학습 진행
@@ -31,10 +31,10 @@ python3 train.py data_root=/path/to/data_root model=model_mae batch_size=128
 python3 train.py data_root=/path/to/data_root model=model_forecast batch_size=128 'pretrained_weights="/path/to/pretrain_ckpt"'
 ```
 - 실제 데이터셋 위치를 /path/to/data_root, Pre-training 모델 결과를 /path/to/pretrain_ckpt에 기입
-    - ex) python3 train.py data_root=/Desktop/git/HMG_Transformer model=model_forecast batch_size=128 'pretrained_weights="/Desktop/git/HMG_Transformer/Outputs/2024-08-13/12-30-30/checkpoints/last.ckpt"'
+    - ex) python3 train.py data_root=/Desktop/git/HMG_Transformer model=model_forecast batch_size=128 'pretrained_weights="/Desktop/git/HMG_Transformer/Outputs/2024-08-13/11-40-41/checkpoints/last.ckpt"'
 
 - 학습 완료 시, ```Outputs/forecast-mae-forecast/YYYY-MM-DD/HH-MM-SS``` 폴더 내 학습 결과 생성
-    - ex) Outputs/forecast-mae-forecast/2024-08-13/14-30-30 폴더 생성 확인
+    - ex) Outputs/forecast-mae-forecast/2024-08-13/12-49-19 폴더 생성 확인
 
 ## Evaluation
 #### 학습된 모델을 통해 실제 추론하고자하는 Test_dataset Route Validation 진행
@@ -42,7 +42,7 @@ python3 train.py data_root=/path/to/data_root model=model_forecast batch_size=12
 python3 eval.py data_root=/path/to/data_root model=model_forecast batch_size=64 'checkpoint="/path/to/checkpoint"'
 ```
 - 실제 데이터셋 위치를 /path/to/data_root, Phase 2 모델 결과를 /path/to/pretrain_ckpt에 기입
-    - ex) python3 eval.py data_root=/Desktop/git/HMG_Transformer model=model_forecast batch_size=128 'checkpoint="/Desktop/git/HMG_Transformer/Outputs/2024-08-13/14-30-30/checkpoints/last.ckpt"'
+    - ex) python3 eval.py data_root=/Desktop/git/HMG_Transformer model=model_forecast batch_size=128 'checkpoint="/Desktop/git/HMG_Transformer/Outputs/2024-08-13/12-49-19/checkpoints/last.ckpt"'
 
 - 학습 완료 시, command 창에 나오는 ```Accuracy, Precision, Recall``` 확인
 
