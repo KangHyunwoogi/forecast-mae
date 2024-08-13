@@ -1,6 +1,6 @@
 name: forecast-mae
 phase: pretrain
-additional_name: paper_implementation_v1
+additional_name: paper_implementation_v1_128
 
 target:
   _target_: src.model.trainer_mae.Trainer
