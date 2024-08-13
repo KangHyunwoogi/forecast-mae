@@ -1,4 +1,0 @@
-- data_root=/home/ailab/AILabDataset/01_Open_Dataset/24_Argoverse2/motion_forecasting_sub
-- model=model_forecast
-- batch_size=128
-- checkpoint="outputs/forecast-mae-forecast/2024-08-13/12-49-19/checkpoints/last.ckpt"
