@@ -8,7 +8,7 @@ seed: 2333
 monitor: val_Accuracy
 save_top_k: 10
 
-data_root:
+data_root: 
 checkpoint:
 pretrained_weights:
 output: ${model.name}-${model.phase}
@@ -18,7 +18,7 @@ num_workers: 8
 gpus: 1
 sync_bn: true
 batch_size: 32
-epochs: 60
+epochs: 150
 warmup_epochs: 10
 
 # optimizer
