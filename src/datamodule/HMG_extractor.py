@@ -108,23 +108,30 @@ class HMGExtractor:
 
         filtered_left_y = left_y[left_valid_indices]
         filtered_right_y = right_y[right_valid_indices]
+        
+        LeftSize = len(filtered_left_y)
+        RightSize = len(filtered_right_y)
 
-        # y값을 cubic spline을 사용하여 보간
-        if len(filtered_left_y) > 1:
-            f_left = interp1d(np.arange(len(filtered_left_y)), filtered_left_y, kind='cubic', fill_value="extrapolate")
-            filtered_interpolated_left_y = f_left(np.linspace(0, len(filtered_left_y) - 1, num_points))
+        if LeftSize < 4 or RightSize < 4:
+            pass
+
         else:
-            filtered_interpolated_left_y = np.zeros(num_points)
+            # y값을 cubic spline을 사용하여 보간
+            if len(filtered_left_y) > 1:
+                f_left = interp1d(np.arange(len(filtered_left_y)), filtered_left_y, kind='cubic', fill_value="extrapolate")
+                filtered_interpolated_left_y = f_left(np.linspace(0, len(filtered_left_y) - 1, num_points))
+            else:
+                filtered_interpolated_left_y = np.zeros(num_points)
 
-        if len(filtered_right_y) > 1:
-            f_right = interp1d(np.arange(len(filtered_right_y)), filtered_right_y, kind='cubic', fill_value="extrapolate")
-            filtered_interpolated_right_y = f_right(np.linspace(0, len(filtered_right_y) - 1, num_points))
-        else:
-            filtered_interpolated_right_y = np.zeros(num_points)
+            if len(filtered_right_y) > 1:
+                f_right = interp1d(np.arange(len(filtered_right_y)), filtered_right_y, kind='cubic', fill_value="extrapolate")
+                filtered_interpolated_right_y = f_right(np.linspace(0, len(filtered_right_y) - 1, num_points))
+            else:
+                filtered_interpolated_right_y = np.zeros(num_points)
 
-        # 각 행에 값을 할당
-        map_lane_left_y[:len(filtered_interpolated_left_y)] = filtered_interpolated_left_y
-        map_lane_right_y[:len(filtered_interpolated_right_y)] = filtered_interpolated_right_y
+            # 각 행에 값을 할당
+            map_lane_left_y[:len(filtered_interpolated_left_y)] = filtered_interpolated_left_y
+            map_lane_right_y[:len(filtered_interpolated_right_y)] = filtered_interpolated_right_y
 
         ego_past_trajectory_x = raw_data['ego_past_trajectory_x']
         ego_past_trajectory_y = raw_data['ego_past_trajectory_y']
