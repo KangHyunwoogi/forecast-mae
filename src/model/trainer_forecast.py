@@ -65,9 +65,9 @@ class Trainer(pl.LightningModule):
         
         metrics = MetricCollection(
             {
-                "Accuracy": Accuracy(),
-                "Precision": Precision(),
-                "Recall": Recall()
+                "Accuracy": Accuracy(task="binary"),
+                "Precision": Precision(task="binary"),
+                "Recall": Recall(task="binary"),
                 # "F1": F1(),
                 # "AUROC": AUROC()
             }
@@ -189,9 +189,9 @@ class Trainer(pl.LightningModule):
         save_dir = Path("./submission")
         save_dir.mkdir(exist_ok=True)
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
-        self.submission_handler = SubmissionAv2(
-            save_dir=save_dir, filename=f"forecast_mae_{timestamp}"
-        )
+        # self.submission_handler = SubmissionAv2(
+        #     save_dir=save_dir, filename=f"forecast_mae_{timestamp}"
+        # )
 
     def test_step(self, data, batch_idx) -> None:
         out = self(data)

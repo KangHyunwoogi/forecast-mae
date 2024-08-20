@@ -127,21 +127,65 @@ for i in range(num_elements):
     
     
 # lane preprocess
-
 max_points_per_segments = 30
-
-lane_segments, lane_attr, is_intersection = [], [], []
 
 percept_lane_center_x = (percept_lane_left_x + percept_lane_right_x) / 2
 percept_lane_center_y = (percept_lane_left_y + percept_lane_right_y) / 2
 
+perception_lane_segments, perception_lane_attr, perception_is_intersection = [], [], []
+
 # 반복문 외부에서 초기화
+perception_lane_segment = np.zeros((max_points_per_segments, 2))
+
+for i in range(num_elements):
+    # 반복문 내부에서는 각각의 레인 세그먼트를 텐서로 변환
+    perception_lane_segment[:, 0] = percept_lane_center_x[i, :]
+    perception_lane_segment[:, 1] = percept_lane_center_y[i, :]
+    perception_lane_segments.append(torch.from_numpy(perception_lane_segment).float())  # numpy 배열을 torch.Tensor로 변환
+    perception_attribute = torch.tensor([0, 0, 0], dtype=torch.float)
+    perception_lane_attr.append(perception_attribute)
+    perception_is_intersection.append(0)
+    
+perception_lane_positions = torch.stack(perception_lane_segments, dim=0)
+perception_lane_positions = perception_lane_positions.unsqueeze(1)
+perception_lane_attr = torch.stack(perception_lane_attr, dim=0)
+perception_lane_attr = perception_lane_attr.unsqueeze(1)
+perception_is_intersections = torch.Tensor(perception_is_intersection)
+perception_is_intersections = perception_is_intersections.unsqueeze(1)
+perception_lane_ctrs = perception_lane_positions[:, 9:11].mean(dim=1)
+perception_lane_ctrs = perception_lane_ctrs.unsqueeze(1)
+perception_lane_angles = torch.atan2(
+            perception_lane_positions[:, :, 10, 1] - perception_lane_positions[:, :, 9, 1],
+            perception_lane_positions[:, :, 10, 0] - perception_lane_positions[:, :, 9, 0],
+        )
+perception_lane_angles = perception_lane_angles.unsqueeze(1)
+perception_lane_padding_mask = (
+    (perception_lane_positions[:, :, :, 0] > 1000)
+    | (perception_lane_positions[:, :, :, 0] < -1000)
+    | (perception_lane_positions[:, :, :, 1] > 1000)
+    | (perception_lane_positions[:, :, :, 1] < -1000)
+)
+
+print(perception_lane_positions.size())
+print(perception_lane_attr.size())
+print(perception_is_intersections.size())
+print(perception_lane_ctrs.size())
+print(perception_lane_angles.size())
+print(perception_lane_padding_mask.size())
+
+
+########################################################################
+lane_segments, lane_attr, is_intersection = [], [], []
+
+lane_center_x = (percept_lane_left_x + percept_lane_right_x) / 2
+lane_center_y = (map_lane_left_y + map_lane_right_y) / 2
+
 lane_segment = np.zeros((max_points_per_segments, 2))
 
 for i in range(num_elements):
     # 반복문 내부에서는 각각의 레인 세그먼트를 텐서로 변환
-    lane_segment[:, 0] = percept_lane_center_x[i, :]
-    lane_segment[:, 1] = percept_lane_center_y[i, :]
+    lane_segment[:, 0] = lane_center_x[i, :]
+    lane_segment[:, 1] = lane_center_y[i, :]
     lane_segments.append(torch.from_numpy(lane_segment).float())  # numpy 배열을 torch.Tensor로 변환
     attribute = torch.tensor([0, 0, 0], dtype=torch.float)
     lane_attr.append(attribute)
@@ -167,6 +211,7 @@ lane_padding_mask = (
     | (lane_positions[:, :, :, 1] < -1000)
 )
 
+print("--------------------")
 print(lane_positions.size())
 print(lane_attr.size())
 print(is_intersections.size())
