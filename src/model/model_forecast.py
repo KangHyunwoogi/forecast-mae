@@ -7,11 +7,8 @@ import torch.nn.functional as F
 from .layers.agent_embedding import AgentEmbeddingLayer
 from .layers.lane_embedding import LaneEmbeddingLayer
 from .layers.multimodal_decoder import MultimodalDecoder
-from .layers.vocabulary_decoder import VocabularyDecoder
 from .layers.transformer_blocks import Block
 
-import numpy as np
-import pandas as pd
 
 class ModelForecast(nn.Module):
     def __init__(
@@ -53,16 +50,9 @@ class ModelForecast(nn.Module):
         self.lane_type_embed = nn.Parameter(torch.Tensor(1, 1, embed_dim))
 
         self.decoder = MultimodalDecoder(embed_dim, future_steps)
-        self.vocabulary_decoder = VocabularyDecoder(embed_dim, future_steps)
         self.dense_predictor = nn.Sequential(
             nn.Linear(embed_dim, 256), nn.ReLU(), nn.Linear(256, future_steps * 2)
         )
-
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # GPU 사용 여부 확인
-        csv_file_path = '/home/ailab/Desktop/wook/forecast-mae/trajectory_data.csv'
-
-        self.vocabulary_trajectories, self.trajectory_candidate_number = self.load_trajectories_from_csv(csv_file_path)
-        self.encoded_trajectories = torch.stack([self.encode_trajectory(trajectory) for trajectory in self.vocabulary_trajectories])
 
         self.initialize_weights()
 
@@ -87,56 +77,6 @@ class ModelForecast(nn.Module):
             k[len("net.") :]: v for k, v in ckpt.items() if k.startswith("net.")
         }
         return self.load_state_dict(state_dict=state_dict, strict=False)
-
-    def positional_encoding(self, pos, L=32):
-        i = torch.arange(L, dtype=torch.float32).unsqueeze(0)  # (1, L)
-        pos = pos.unsqueeze(-1)  # (2, 1)
-
-        # Broadcasting pos and i to compute the positional encoding
-        gamma_pos = torch.cat([torch.cos(pos / (10000 ** (2 * np.pi * i / L))),
-                            torch.sin(pos / (10000 ** (2 * np.pi * i / L)))], dim=-1)
-        return gamma_pos.flatten()  # Flatten to a 1D vector
-
-    def encode_trajectory(self, trajectory, L=32):
-        # trajectory is expected to be of shape (60, 2)
-        
-        # Apply positional encoding to each (x, y) pair in the trajectory
-        encoded_positions = torch.stack([self.positional_encoding(pos, L) for pos in trajectory], dim=0)
-        # Aggregate encoded positions to form a single query vector
-        query_vector = encoded_positions.mean(dim=0)  # (L * 2,) -> (256,)
-        
-        return query_vector
-
-    def load_trajectories_from_csv(self, file_path):
-        # CSV 파일 읽기
-        df = pd.read_csv(file_path)
-
-        # path_id별로 그룹화
-        grouped = df.groupby('path_id')
-
-        # 각 path_id에 대해 60x2 형태로 변환된 데이터 저장
-        trajectories = []
-
-        for _, group in grouped:
-            # time 순으로 정렬
-            group = group.sort_values(by='time')
-
-            # x, y 좌표를 가져와 numpy 배열로 변환
-            xy = group[['x', 'y']].values
-
-            # 만약 60 timesteps보다 적다면 패딩(예: 0으로) 추가
-            if len(xy) < 60:
-                padding = np.zeros((60 - len(xy), 2))
-                xy = np.vstack((xy, padding))
-            elif len(xy) > 60:
-                xy = xy[:60]  # 60 timesteps로 자르기
-
-            trajectories.append(xy)
-        # 결과를 tensor로 변환 (path_id, 60, 2) 형태
-        trajectories_tensor = torch.tensor(trajectories, dtype=torch.float32)
-        trajectories_tensor = trajectories_tensor[:10, :, :]  # for debugging
-        
-        return trajectories_tensor, len(trajectories_tensor)
 
     def forward(self, data):
         hist_padding_mask = data["x_padding_mask"][:, :, :50]
@@ -192,35 +132,14 @@ class ModelForecast(nn.Module):
             x_encoder = blk(x_encoder, key_padding_mask=key_padding_mask)
         x_encoder = self.norm(x_encoder)
 
-        print("x_encoder")
-        print(x_encoder)
-        print(x_encoder.shape)
+        x_agent = x_encoder[:, 0]
+        y_hat, pi = self.decoder(x_agent)
 
-        # 기존 코드
-        # x_agent = x_encoder[:, 0]
-        # y_hat, pi = self.decoder(x_agent)
+        x_others = x_encoder[:, 1:N]
+        y_hat_others = self.dense_predictor(x_others).view(B, -1, 60, 2)
 
-        # x_others = x_encoder[:, 1:N]
-        # y_hat_others = self.dense_predictor(x_others).view(B, -1, 60, 2)
-
-        # Use the vocabulary as the query, and encoder output as key and value
-        query = self.encoded_trajectories.to(self.device)
-        query = query.unsqueeze(0)
-        query = query.expand(B, -1, -1)
-        x_agent = x_encoder[:, 0, :].unsqueeze(1)  # (B, 1, embed_dim)
-        key = value = x_agent  # Use the entire encoder output as key and value
-        print("key")
-        print(key)
-        print("value")
-        print(value)
-        # print(value)
-        # Pass through the decoder
-        y_hat = self.vocabulary_decoder(query, key, value)
-        # print(y_hat.shape)
-        print("y_hat")
-        print(y_hat)
         return {
             "y_hat": y_hat,
-            # "pi": pi,
-            # "y_hat_others": y_hat_others,
+            "pi": pi,
+            "y_hat_others": y_hat_others,
         }

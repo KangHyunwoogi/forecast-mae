@@ -13,8 +13,6 @@ from src.utils.submission_av2 import SubmissionAv2
 
 from .model_forecast import ModelForecast
 
-import numpy as np
-import pandas as pd
 
 class Trainer(pl.LightningModule):
     def __init__(
@@ -56,48 +54,14 @@ class Trainer(pl.LightningModule):
 
         metrics = MetricCollection(
             {
-                # "minADE1": minADE(k=1),
-                # "minADE6": minADE(k=6),
-                # "minFDE1": minFDE(k=1),
-                # "minFDE6": minFDE(k=6),
-                # "MR": MR(),
+                "minADE1": minADE(k=1),
+                "minADE6": minADE(k=6),
+                "minFDE1": minFDE(k=1),
+                "minFDE6": minFDE(k=6),
+                "MR": MR(),
             }
         )
         self.val_metrics = metrics.clone(prefix="val_")
-        
-        csv_file_path = '/home/ailab/Desktop/wook/forecast-mae/trajectory_data.csv'
-        self.vocabulary_trajectories, self.trajectory_candidate_number = self.load_trajectories_from_csv(csv_file_path)
-        
-    def load_trajectories_from_csv(self, file_path):
-        # CSV 파일 읽기
-        df = pd.read_csv(file_path)
-
-        # path_id별로 그룹화
-        grouped = df.groupby('path_id')
-
-        # 각 path_id에 대해 60x2 형태로 변환된 데이터 저장
-        trajectories = []
-
-        for _, group in grouped:
-            # time 순으로 정렬
-            group = group.sort_values(by='time')
-
-            # x, y 좌표를 가져와 numpy 배열로 변환
-            xy = group[['x', 'y']].values
-
-            # 만약 60 timesteps보다 적다면 패딩(예: 0으로) 추가
-            if len(xy) < 60:
-                padding = np.zeros((60 - len(xy), 2))
-                xy = np.vstack((xy, padding))
-            elif len(xy) > 60:
-                xy = xy[:60]  # 60 timesteps로 자르기
-
-            trajectories.append(xy)
-        # 결과를 tensor로 변환 (path_id, 60, 2) 형태
-        trajectories_tensor = torch.tensor(trajectories, dtype=torch.float32)
-        trajectories_tensor = trajectories_tensor[:10, :, :]  # for debugging
-        
-        return trajectories_tensor, len(trajectories_tensor)
 
     def forward(self, data):
         return self.net(data)
@@ -111,76 +75,29 @@ class Trainer(pl.LightningModule):
         return predictions, prob
 
     def cal_loss(self, out, data):
-        # y_hat, pi = out["y_hat"], out["pi"]
-        print("debug")
-        y_hat = out["y_hat"]
-        gt_trajectory = data["y"][:, 0]  # Assume the ground truth trajectory is in 'data["y"][:, 0]'
+        y_hat, pi, y_hat_others = out["y_hat"], out["pi"], out["y_hat_others"]
+        y, y_others = data["y"][:, 0], data["y"][:, 1:]
 
-        vocabulary_distances = torch.norm(self.vocabulary_trajectories.unsqueeze(0).to(self.device) - gt_trajectory.unsqueeze(1), dim=-1).sum(dim=-1)  # (B, vocabulary_size)
-        closest_trajectory_idx = torch.argmin(vocabulary_distances, dim=-1)  # (B,)
-        
-        target = F.one_hot(closest_trajectory_idx, num_classes=self.vocabulary_trajectories.size(0)).float()
-        
-        
-        
-        # Reshape y_hat and target to match the expected shape for F.cross_entropy
-        y_hat = y_hat.view(-1, self.vocabulary_trajectories.size(0))  # (B, vocabulary_size)
-        target = target.view(-1, self.vocabulary_trajectories.size(0))  # (B, vocabulary_size)
-        
-        # torch.set_printoptions(edgeitems=torch.inf, threshold=torch.inf)
-        # print(target)
-        
-        print("y_hat")
-        print(y_hat)
-        print("target")
-        print(target)
-        
-        loss = F.binary_cross_entropy_with_logits(y_hat, target)
+        l2_norm = torch.norm(y_hat[..., :2] - y.unsqueeze(1), dim=-1).sum(dim=-1)
+        best_mode = torch.argmin(l2_norm, dim=-1)
+        y_hat_best = y_hat[torch.arange(y_hat.shape[0]), best_mode]
 
-        # # Calculate L2 distance between predicted trajectory and all vocabulary trajectories
-        # distances = torch.norm(y_hat - gt_trajectory.unsqueeze(1), dim=-1).sum(dim=-1)
+        agent_reg_loss = F.smooth_l1_loss(y_hat_best[..., :2], y)
+        agent_cls_loss = F.cross_entropy(pi, best_mode.detach())
 
-        # # Find the index of the closest trajectory in the vocabulary to the ground truth trajectory
-        # best_mode = torch.argmin(distances, dim=-1)
-        # y_hat_best = y_hat[torch.arange(y_hat.shape[0]), best_mode]
+        others_reg_mask = ~data["x_padding_mask"][:, 1:, 50:]
+        others_reg_loss = F.smooth_l1_loss(
+            y_hat_others[others_reg_mask], y_others[others_reg_mask]
+        )
 
-        # # Calculate regression loss and classification loss
-        # agent_reg_loss = F.smooth_l1_loss(y_hat_best[..., :2], gt_trajectory)
-        # # agent_cls_loss = F.cross_entropy(pi, best_mode.detach())
-
-        # Total loss
-        # loss = agent_reg_loss # + agent_cls_loss
+        loss = agent_reg_loss + agent_cls_loss + others_reg_loss
 
         return {
             "loss": loss,
-            # "reg_loss": agent_reg_loss.item(),
-            # "cls_loss": agent_cls_loss.item(),
+            "reg_loss": agent_reg_loss.item(),
+            "cls_loss": agent_cls_loss.item(),
+            "others_reg_loss": others_reg_loss.item(),
         }
-        
-        # 원본 코드
-        # y_hat, pi, y_hat_others = out["y_hat"], out["pi"], out["y_hat_others"]
-        # y, y_others = data["y"][:, 0], data["y"][:, 1:]
-
-        # l2_norm = torch.norm(y_hat[..., :2] - y.unsqueeze(1), dim=-1).sum(dim=-1)
-        # best_mode = torch.argmin(l2_norm, dim=-1)
-        # y_hat_best = y_hat[torch.arange(y_hat.shape[0]), best_mode]
-
-        # agent_reg_loss = F.smooth_l1_loss(y_hat_best[..., :2], y)
-        # agent_cls_loss = F.cross_entropy(pi, best_mode.detach())
-
-        # others_reg_mask = ~data["x_padding_mask"][:, 1:, 50:]
-        # others_reg_loss = F.smooth_l1_loss(
-        #     y_hat_others[others_reg_mask], y_others[others_reg_mask]
-        # )
-
-        # loss = agent_reg_loss + agent_cls_loss + others_reg_loss
-
-        # return {
-        #     "loss": loss,
-        #     "reg_loss": agent_reg_loss.item(),
-        #     "cls_loss": agent_cls_loss.item(),
-        #     "others_reg_loss": others_reg_loss.item(),
-        # }
 
     def training_step(self, data, batch_idx):
         out = self(data)
@@ -204,8 +121,8 @@ class Trainer(pl.LightningModule):
         metrics = self.val_metrics(out, data["y"][:, 0])
 
         self.log(
-            "val/loss",
-            losses["loss"],
+            "val/reg_loss",
+            losses["reg_loss"],
             on_step=False,
             on_epoch=True,
             prog_bar=False,
