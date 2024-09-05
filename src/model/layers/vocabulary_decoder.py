@@ -44,8 +44,8 @@ class VocabularyDecoder(nn.Module):
         # Calculate attention scores
         attention_scores = torch.matmul(query, key.transpose(-2, -1)) / (self.embed_dim ** 0.5)
         print("attention_scores")
-        print(attention_scores)
-        attention_weights = F.softmax(attention_scores)
+        print(attention_scores.shape)
+        attention_weights = F.softmax(attention_scores, dim=-2)
 
         print("attention_weights")
         print(attention_weights)
