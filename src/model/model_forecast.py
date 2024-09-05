@@ -192,9 +192,9 @@ class ModelForecast(nn.Module):
             x_encoder = blk(x_encoder, key_padding_mask=key_padding_mask)
         x_encoder = self.norm(x_encoder)
 
-        print("x_encoder")
-        print(x_encoder)
-        print(x_encoder.shape)
+        # print("x_encoder")
+        # print(x_encoder)
+        # print(x_encoder.shape)
 
         # 기존 코드
         # x_agent = x_encoder[:, 0]
@@ -209,16 +209,16 @@ class ModelForecast(nn.Module):
         query = query.expand(B, -1, -1)
         x_agent = x_encoder[:, 0, :].unsqueeze(1)  # (B, 1, embed_dim)
         key = value = x_agent  # Use the entire encoder output as key and value
-        print("key")
-        print(key)
-        print("value")
-        print(value)
+        # print("key")
+        # print(key)
+        # print("value")
+        # print(value)
         # print(value)
         # Pass through the decoder
         y_hat = self.vocabulary_decoder(query, key, value)
         # print(y_hat.shape)
-        print("y_hat")
-        print(y_hat)
+        # print("y_hat")
+        # print(y_hat)
         return {
             "y_hat": y_hat,
             # "pi": pi,

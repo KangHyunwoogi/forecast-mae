@@ -16,6 +16,8 @@ from .model_forecast import ModelForecast
 import numpy as np
 import pandas as pd
 
+import math
+
 class Trainer(pl.LightningModule):
     def __init__(
         self,
@@ -112,16 +114,22 @@ class Trainer(pl.LightningModule):
 
     def cal_loss(self, out, data):
         # y_hat, pi = out["y_hat"], out["pi"]
-        print("debug")
         y_hat = out["y_hat"]
         gt_trajectory = data["y"][:, 0]  # Assume the ground truth trajectory is in 'data["y"][:, 0]'
 
-        vocabulary_distances = torch.norm(self.vocabulary_trajectories.unsqueeze(0).to(self.device) - gt_trajectory.unsqueeze(1), dim=-1).sum(dim=-1)  # (B, vocabulary_size)
+        vocabulary_distances = torch.norm(self.vocabulary_trajectories.unsqueeze(0).to(self.device) - gt_trajectory.unsqueeze(1), dim=-1).sum(dim=-1)  # (B, vocabulary_size)\
         closest_trajectory_idx = torch.argmin(vocabulary_distances, dim=-1)  # (B,)
+        closest_trajectory_idx = closest_trajectory_idx.unsqueeze(-1)  # (B, 1)
+        
+        # print("closest_trajectory_idx")
+        # print(closest_trajectory_idx)
         
         target = F.one_hot(closest_trajectory_idx, num_classes=self.vocabulary_trajectories.size(0)).float()
         
-        
+        # print
+        # print("vocabulary_distances")
+        # print(vocabulary_distances.shape)
+        # print(vocabulary_distances)
         
         # Reshape y_hat and target to match the expected shape for F.cross_entropy
         y_hat = y_hat.view(-1, self.vocabulary_trajectories.size(0))  # (B, vocabulary_size)
@@ -130,12 +138,45 @@ class Trainer(pl.LightningModule):
         # torch.set_printoptions(edgeitems=torch.inf, threshold=torch.inf)
         # print(target)
         
-        print("y_hat")
-        print(y_hat)
-        print("target")
-        print(target)
+        # print("y_hat")
+        # print(y_hat)
+        # print("target")
+        # print(target)
         
-        loss = F.binary_cross_entropy_with_logits(y_hat, target)
+        classification_loss = F.binary_cross_entropy_with_logits(y_hat, target)
+
+        # 1. 추가적인 거리 기반 가중치를 적용한 BCE loss
+        gt_distance = torch.norm(gt_trajectory - self.vocabulary_trajectories[closest_trajectory_idx].to(self.device), dim=-1)  # (B,)
+
+        # print(gt_trajectory.shape)
+        # print(self.vocabulary_trajectories.shape)
+        # print(classification_loss.shape)
+        # print(gt_distance.shape)
+        
+        # 거리가 멀수록 가중치를 더 높게 설정
+        # clipped_distance = torch.clamp(gt_distance, max=20)
+        selected_vocabulary_distances = torch.gather(vocabulary_distances, 1, closest_trajectory_idx)
+        clipped_distance = torch.sqrt(selected_vocabulary_distances)
+        distance_weight = F.softplus(clipped_distance)  # 거리 기반 가중치
+        # print("distance_weight")
+        # print(distance_weight)
+        weighted_classification_loss = (classification_loss * distance_weight).mean()
+        
+        # # 2. L2 거리 손실 추가
+        # l2_loss = F.mse_loss(y_hat, gt_trajectory)  # 예측 값과 실제 경로 간의 거리 기반 손실
+        
+        # # 최종 손실은 거리 기반 가중치를 반영한 분류 손실 + L2 손실
+        # total_loss = weighted_classification_loss + l2_loss
+
+        print("weighted_classification_loss")
+        print(weighted_classification_loss)
+        print("classification_loss")
+        print(classification_loss)
+        # print("l2_loss")
+        # print(l2_loss)
+        # print("total_loss")
+        # print(total_loss)
+        
 
         # # Calculate L2 distance between predicted trajectory and all vocabulary trajectories
         # distances = torch.norm(y_hat - gt_trajectory.unsqueeze(1), dim=-1).sum(dim=-1)
@@ -152,7 +193,10 @@ class Trainer(pl.LightningModule):
         # loss = agent_reg_loss # + agent_cls_loss
 
         return {
-            "loss": loss,
+            "loss": weighted_classification_loss,
+            # "classification_loss": weighted_classification_loss.item(),
+            # "l2_loss": l2_loss.item(),
+            # "loss": loss,
             # "reg_loss": agent_reg_loss.item(),
             # "cls_loss": agent_cls_loss.item(),
         }
