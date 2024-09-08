@@ -97,7 +97,7 @@ class Trainer(pl.LightningModule):
             trajectories.append(xy)
         # 결과를 tensor로 변환 (path_id, 60, 2) 형태
         trajectories_tensor = torch.tensor(trajectories, dtype=torch.float32)
-        trajectories_tensor = trajectories_tensor[:10, :, :]  # for debugging
+        trajectories_tensor = trajectories_tensor[:50, :, :]  # for debugging
         
         return trajectories_tensor, len(trajectories_tensor)
 
@@ -191,9 +191,25 @@ class Trainer(pl.LightningModule):
 
         # Total loss
         # loss = agent_reg_loss # + agent_cls_loss
+        # Accuracy Calculation
+        with torch.no_grad():
+            # Get the predicted trajectory indices from y_hat (max probability indices)
+            predicted_trajectory_idx = torch.argmax(y_hat, dim=-1)  # (B,)
+            
+            # Compare with the ground truth closest trajectory index (gt_trajectory)
+            correct_predictions = (predicted_trajectory_idx == closest_trajectory_idx.squeeze(-1)).float()
+            
+            # print(correct_predictions.shape)
+            
+            # Calculate accuracy
+            accuracy = correct_predictions.mean()
+    
+        # Log the accuracy for debugging/monitoring
+        self.log("train/accuracy", accuracy, on_step=True, on_epoch=True, prog_bar=True)
 
         return {
             "loss": weighted_classification_loss,
+            "Accuracy": accuracy,
             # "classification_loss": weighted_classification_loss.item(),
             # "l2_loss": l2_loss.item(),
             # "loss": loss,
@@ -250,6 +266,14 @@ class Trainer(pl.LightningModule):
         self.log(
             "val/loss",
             losses["loss"],
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
+            sync_dist=True,
+        )
+        self.log(
+            "val/Accuracy",
+            losses["Accuracy"],
             on_step=False,
             on_epoch=True,
             prog_bar=False,

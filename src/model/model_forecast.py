@@ -134,7 +134,7 @@ class ModelForecast(nn.Module):
             trajectories.append(xy)
         # 결과를 tensor로 변환 (path_id, 60, 2) 형태
         trajectories_tensor = torch.tensor(trajectories, dtype=torch.float32)
-        trajectories_tensor = trajectories_tensor[:10, :, :]  # for debugging
+        trajectories_tensor = trajectories_tensor[:50, :, :]  # for debugging
         
         return trajectories_tensor, len(trajectories_tensor)
 
