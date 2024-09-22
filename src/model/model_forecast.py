@@ -59,7 +59,8 @@ class ModelForecast(nn.Module):
         )
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # GPU 사용 여부 확인
-        csv_file_path = '/home/ailab/Desktop/wook/forecast-mae/tetest1_2024-09-02-22-13-12.csv'
+        # csv_file_path = '/home/ailab/Desktop/wook/forecast-mae/tetest1_2024-09-02-22-13-12.csv'
+        csv_file_path = '/home/ailab/Desktop/wook/forecast-mae/argoverse_vocabulary_2048.csv'
 
         self.vocabulary_trajectories, self.trajectory_candidate_number = self.load_trajectories_from_csv(csv_file_path)
         self.encoded_trajectories = torch.stack([self.encode_trajectory(trajectory) for trajectory in self.vocabulary_trajectories])
